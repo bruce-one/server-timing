@@ -48,6 +48,8 @@ app.use((req, res, next) => {
 
 - options.total: boolean, default `true`
 - options.enabled: boolean, default `true`
+- options.trailers: boolean, default `false`, use HTTP trailers rather than HTTP
+  headers - only when the request is http 1.1 or greater
 
 # Result
 

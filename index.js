@@ -6,10 +6,11 @@ const Timer = require('./timer')
 module.exports = function serverTiming(options) {
   const opts = Object.assign({
     total: true,
-    enabled: true
+    enabled: true,
+    trailers: false,
   }, options);
-  return (_, res, next) => {
-    const headers = []
+  return (req, res, next) => {
+    const measurements = []
     const timer = new Timer()
     if (res.setMetric) {
       throw new Error('res.setMetric already exists.')
@@ -17,23 +18,38 @@ module.exports = function serverTiming(options) {
 
     const startAt = process.hrtime()
 
-    res.setMetric = setMetric(headers)
+    res.setMetric = setMetric(measurements)
     res.startTime = startTime(timer)
     res.endTime = endTime(timer, res)
 
-    onHeaders(res, () => {
+    if(opts.trailers && (req.httpVersionMajor === 1 && req.httpVersionMinor >= 1) || req.httpVersionMajor >= 2) {
+      res.setHeader('Transfer-Encoding', 'chunked')
+      res.setHeader('Trailer', 'Server-Timing')
+      const end = res.end
+      res.end = (...args) => {
+        processTiming()
+        if (opts.enabled) {
+          res.addTrailers({ 'Server-Timing': measurements.join(', ') })
+        }
+        end.call(res, ...args)
+      }
+    } else {
+      onHeaders(res, () => {
+        processTiming()
+        if (opts.enabled) {
+          const existingHeaders = res.getHeader('Server-Timing')
+          res.setHeader('Server-Timing', [].concat(existingHeaders || []).concat(measurements).join(', '))
+        }
+      })
+    }
+    function processTiming() {
       if (opts.total) {
         const diff = process.hrtime(startAt)
         const timeSec = (diff[0] * 1E3) + (diff[1] * 1e-6)
-        headers.push(`total; dur=${timeSec}; desc="Total Response Time"`)
+        measurements.push(`total; dur=${timeSec}; desc="Total Response Time"`)
       }
       timer.clear()
-
-      if (opts.enabled) {
-        const existingHeaders = res.getHeader('Server-Timing')
-        res.setHeader('Server-Timing', [].concat(existingHeaders || []).concat(headers).join(', '))
-      }
-    })
+    }
     if (typeof next === 'function') {
       next()
     }

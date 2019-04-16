@@ -115,3 +115,26 @@ test('success: no response', () => {
     }))
   })
 })
+
+test('success: using trailers', () => {
+  const server = http.createServer((req, res) => {
+    serverTiming({ trailers: true })(req, res)
+    res.setMetric('foo', 100.0)
+    res.setMetric('bar', 10.0, 'Bar is not Foo')
+    res.setMetric('baz', 0)
+    res.end('hello')
+  }).listen(0, () => {
+    http.get(`http://localhost:${server.address().port}/`, mustCall((res) => {
+      const assertStream = new AssertStream()
+      assertStream.expect('hello')
+      res.pipe(assertStream)
+
+      res.on('end', mustCall(() => {
+        const timingFooter = res.trailers['server-timing']
+        assert(/total; dur=.*; desc="Total Response Time"/.test(timingFooter))
+        assert(/foo; dur=100, bar; dur=10; desc="Bar is not Foo", baz; dur=0/.test(timingFooter))
+        server.close()
+      }))
+    }))
+  })
+})
