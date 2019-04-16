@@ -138,3 +138,28 @@ test('success: using trailers', () => {
     }))
   })
 })
+
+test('success: using trailers but fallback to headers - http 1.0', () => {
+  const server = http.createServer((req, res) => {
+    serverTiming({ trailers: true })(req, res)
+    res.setMetric('foo', 100.0)
+    res.setMetric('bar', 10.0, 'Bar is not Foo')
+    res.setMetric('baz', 0)
+    res.end('hello')
+  }).listen(0, () => {
+    const req = http.request(`http://localhost:${server.address().port}/`, mustCall((res) => {
+      const assertStream = new AssertStream()
+      assertStream.expect('hello')
+      res.pipe(assertStream)
+
+      const timingHeader = res.headers['server-timing']
+      assert(/total; dur=.*; desc="Total Response Time"/.test(timingHeader))
+      assert(/foo; dur=100, bar; dur=10; desc="Bar is not Foo", baz; dur=0/.test(timingHeader))
+      server.close()
+    }))
+    // force a http 1.0 request (super dodgy...)
+    const _storeHeader = req._storeHeader
+    req._storeHeader = (firstLine, headers) => _storeHeader.call(req, firstLine.replace(/1\.1/, '1.0'), headers)
+    req.end()
+  })
+})
