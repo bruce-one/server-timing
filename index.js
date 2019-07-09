@@ -25,6 +25,7 @@ module.exports = function serverTiming(options) {
     if(opts.trailers && (req.httpVersionMajor === 1 && req.httpVersionMinor >= 1) || req.httpVersionMajor >= 2) {
       res.setHeader('Transfer-Encoding', 'chunked')
       res.setHeader('Trailer', 'Server-Timing')
+      onHeaders(res, () => res.removeHeader('Content-Length')) // Transfer-Encoding and Content-Length can't coexist; but Transfer-Encoding is required for trailers
       const end = res.end
       res.end = (...args) => {
         processTiming()
