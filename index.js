@@ -25,8 +25,18 @@ module.exports = function serverTiming(options) {
 
     if(opts.trailers && (req.httpVersionMajor === 1 && req.httpVersionMinor >= 1) || req.httpVersionMajor >= 2) {
       res.setHeader('Transfer-Encoding', 'chunked')
-      res.setHeader('Trailer', 'Server-Timing')
-      onHeaders(res, () => res.removeHeader('Content-Length')) // Transfer-Encoding and Content-Length can't coexist; but Transfer-Encoding is required for trailers
+      onHeaders(res, () => {
+        if(res.statusCode === 204 || res.statusCode === 304) {
+          res.end = end
+          if (opts.completeTimingsOnEnd) {
+            timer.keys().forEach( (k) => res.endTime(k))
+          }
+          setHeader(res)
+        } else { // node override (for 204 and 304 in particular)
+          res.setHeader('Trailer', 'Server-Timing')
+          res.removeHeader('Content-Length') // Transfer-Encoding and Content-Length can't coexist; but Transfer-Encoding is required for trailers
+        }
+      })
       const end = res.end
       res.end = (...args) => {
         if (opts.completeTimingsOnEnd) {
@@ -39,13 +49,14 @@ module.exports = function serverTiming(options) {
         end.call(res, ...args)
       }
     } else {
-      onHeaders(res, () => {
-        processTiming()
-        if (opts.enabled) {
-          const existingHeaders = res.getHeader('Server-Timing')
-          res.setHeader('Server-Timing', [].concat(existingHeaders || []).concat(measurements).join(', '))
-        }
-      })
+      onHeaders(res, setHeader)
+    }
+    function setHeader(res) {
+      processTiming()
+      if (opts.enabled) {
+        const existingHeaders = res.getHeader('Server-Timing')
+        res.setHeader('Server-Timing', [].concat(existingHeaders || []).concat(measurements).join(', '))
+      }
     }
     function processTiming() {
       if (opts.total) {
