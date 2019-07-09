@@ -8,6 +8,7 @@ module.exports = function serverTiming(options) {
     total: true,
     enabled: true,
     trailers: false,
+    completeTimingsOnEnd: true,
   }, options);
   return (req, res, next) => {
     const measurements = []
@@ -28,6 +29,9 @@ module.exports = function serverTiming(options) {
       onHeaders(res, () => res.removeHeader('Content-Length')) // Transfer-Encoding and Content-Length can't coexist; but Transfer-Encoding is required for trailers
       const end = res.end
       res.end = (...args) => {
+        if (opts.completeTimingsOnEnd) {
+          timer.keys().forEach( (k) => res.endTime(k))
+        }
         processTiming()
         if (opts.enabled) {
           res.addTrailers({ 'Server-Timing': measurements.join(', ') })

@@ -50,6 +50,9 @@ app.use((req, res, next) => {
 - options.enabled: boolean, default `true`
 - options.trailers: boolean, default `false`, use HTTP trailers rather than HTTP
   headers - only when the request is http 1.1 or greater
+- options.completeTimingsOnEnd: boolean, default `true`, only effective when
+  using trailers, automatically call endTime for all uncompleted timers when
+  setting trailers
 
 # Result
 
